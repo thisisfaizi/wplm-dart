@@ -48,6 +48,8 @@ sealed class WplmError implements Exception {
       case 'machine_not_found':
       case 'machine_inactive':
         return WplmMachineNotFound(message, code: code, status: status);
+      case 'product_mismatch':
+        return WplmProductMismatch(message, code: code, status: status);
       default:
         return WplmApiError(message, code: code, status: status);
     }
@@ -97,6 +99,15 @@ class WplmNotActive extends WplmError {
 /// The device/machine was not found or is inactive.
 class WplmMachineNotFound extends WplmError {
   const WplmMachineNotFound(super.message, {super.code, super.status});
+}
+
+/// The license is valid but bound to a different product than the one this
+/// client was configured for (its signed `pid` does not match [WplmClient.productId]).
+///
+/// This prevents a key issued for product A from being used in product B's app,
+/// enforced both online and offline from the cryptographically signed payload.
+class WplmProductMismatch extends WplmError {
+  const WplmProductMismatch(super.message, {super.code, super.status});
 }
 
 /// A generic API error that did not map to a more specific type.

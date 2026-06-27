@@ -117,6 +117,31 @@ See [`example/`](example/) for a complete Flutter wiring with `LicenseService`.
 
 ---
 
+## Product Binding
+
+Set `productId` and the SDK rejects any license whose signed product id (`pid`)
+does not match — so a key issued for another product cannot run in your app.
+Enforced **online and offline** from the cryptographically signed payload.
+
+```dart
+final wplm = WplmClient(
+  baseUrl: 'https://license.vendor.com',
+  productId: 42,             // this app only accepts product-42 keys
+  licenseKey: key,
+  publicKeyBase64: kPublicKey,
+);
+
+try {
+  await wplm.validate(offlineOk: true);
+} on WplmProductMismatch {
+  // key belongs to a different product
+}
+```
+
+Omit `productId` to opt out (any genuine key is accepted). WooCommerce-issued
+keys carry their product id automatically; generator/API/CSV keys may need the
+admin **Settings → Tools → Re-sign licenses** backfill first.
+
 ## Subscription Renewal
 
 Renewals are handled through **WooCommerce My Account → Subscriptions → Renew**.

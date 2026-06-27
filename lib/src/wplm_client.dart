@@ -93,6 +93,19 @@ class WplmClient {
       if (signed != null && signed.isNotEmpty) {
         await _store.write(_kSignedPayload, signed);
       }
+      // Enforce product binding from the *signed* payload (not the unsigned
+      // license JSON), so a key issued for another product is rejected even
+      // online. No-op when productId is null.
+      if (result.valid && productId != null) {
+        if (signed == null || signed.isEmpty) {
+          throw WplmProductMismatch(
+            'License is valid but carries no signed payload to verify product '
+            'binding for product $productId.',
+            code: 'product_mismatch',
+          );
+        }
+        _enforceProductId(await _verifyWithKeyRefresh(signed));
+      }
       // A successful online call is a trusted clock reading — advance the
       // monotonic time floor so a later offline clock rollback is detectable.
       await _advanceTimeFloor(
@@ -218,6 +231,43 @@ class WplmClient {
   // Offline validation
   // ---------------------------------------------------------------------------
 
+  /// Verify [token] online, recovering from server keypair rotation: if the
+  /// cached public key fails verification, drop it, re-fetch `/public-key`
+  /// once, and retry. This self-heals clients that cached an old public key
+  /// before the vendor rotated the signing keypair.
+  Future<Map<String, dynamic>> _verifyWithKeyRefresh(String token) async {
+    try {
+      return await (await _verifier()).verify(token);
+    } on WplmSignatureInvalid {
+      // Cached key may be stale — invalidate and re-fetch once.
+      _verifierCache = null;
+      await _store.delete(_kPublicKey);
+      return (await _verifier()).verify(token);
+    }
+  }
+
+  /// Reject a signed payload whose product binding does not match [productId].
+  ///
+  /// No-op when [productId] is null (the app opted out of product binding).
+  /// When [productId] is set, the payload's signed `pid` must equal it; a
+  /// missing or different `pid` throws [WplmProductMismatch]. Enforced from the
+  /// signed payload so the rule holds identically online and offline.
+  void _enforceProductId(Map<String, dynamic> payload) {
+    final int? expected = productId;
+    if (expected == null) {
+      return;
+    }
+    final Object? pid = payload['pid'];
+    final int? actual = pid is num ? pid.toInt() : null;
+    if (actual != expected) {
+      throw WplmProductMismatch(
+        'License is bound to product ${actual ?? 'none'}, but this app is '
+        'configured for product $expected.',
+        code: 'product_mismatch',
+      );
+    }
+  }
+
   Future<ValidationResult?> _validateOffline(String key) async {
     final String? token = await _store.read(_kSignedPayload);
     if (token == null || token.isEmpty) {
@@ -240,6 +290,10 @@ class WplmClient {
         fromCache: true,
       );
     }
+
+    // Product binding is enforced offline too: the signed `pid` must match the
+    // configured productId. No-op when productId is null.
+    _enforceProductId(payload);
 
     if (!SignatureVerifier.isWithinClockDrift(payload, maxClockDrift)) {
       return const ValidationResult(

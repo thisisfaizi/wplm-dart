@@ -284,4 +284,195 @@ void main() {
       );
     });
   });
+
+  group('WplmClient product binding', () {
+    Future<({String token, String publicKey})> signWithPid(int? pid) async {
+      final signer = await TestSigner.create();
+      final token = await signer.sign(<String, dynamic>{
+        'key': 'KEY',
+        'expires': '2099-01-01T00:00:00Z',
+        'max': 3,
+        'pid': pid,
+        'iat': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      });
+      return (token: token, publicKey: signer.publicKeyBase64);
+    }
+
+    test('online: matching pid passes', () async {
+      final s = await signWithPid(42);
+      final client = WplmClient(
+        baseUrl: 'https://example.test',
+        licenseKey: 'KEY',
+        productId: 42,
+        publicKeyBase64: s.publicKey,
+        transport: FakeTransport((m, u, b) {
+          if (u.path.endsWith('/validate')) {
+            return WplmResponse(
+              200,
+              successBody(<String, dynamic>{
+                'valid': true,
+                'license': <String, dynamic>{'id': 1, 'status': 1},
+                'signed_payload': s.token,
+                'needs_activation': false,
+              }),
+            );
+          }
+          return WplmResponse(200, successBody(<String, dynamic>{'crl': ''}));
+        }),
+        store: InMemoryTokenStore(),
+      );
+
+      final result = await client.validate();
+      expect(result.valid, isTrue);
+    });
+
+    test('online: mismatched pid throws WplmProductMismatch', () async {
+      final s = await signWithPid(99); // key is for product 99
+      final client = WplmClient(
+        baseUrl: 'https://example.test',
+        licenseKey: 'KEY',
+        productId: 42, // but this app is product 42
+        publicKeyBase64: s.publicKey,
+        transport: FakeTransport((m, u, b) {
+          if (u.path.endsWith('/validate')) {
+            return WplmResponse(
+              200,
+              successBody(<String, dynamic>{
+                'valid': true,
+                'license': <String, dynamic>{'id': 1, 'status': 1},
+                'signed_payload': s.token,
+                'needs_activation': false,
+              }),
+            );
+          }
+          return WplmResponse(200, successBody(<String, dynamic>{'crl': ''}));
+        }),
+        store: InMemoryTokenStore(),
+      );
+
+      expect(client.validate(), throwsA(isA<WplmProductMismatch>()));
+    });
+
+    test('offline: matching pid passes', () async {
+      final s = await signWithPid(42);
+      final store = InMemoryTokenStore();
+      await store.write('wplm.signed_payload', s.token);
+      final client = WplmClient(
+        baseUrl: 'https://example.test',
+        licenseKey: 'KEY',
+        productId: 42,
+        publicKeyBase64: s.publicKey,
+        transport: FakeTransport((m, u, b) {
+          throw const WplmNetworkError('offline');
+        }),
+        store: store,
+      );
+
+      final result = await client.validate(offlineOk: true);
+      expect(result.valid, isTrue);
+      expect(result.fromCache, isTrue);
+    });
+
+    test('offline: mismatched pid throws WplmProductMismatch', () async {
+      final s = await signWithPid(99);
+      final store = InMemoryTokenStore();
+      await store.write('wplm.signed_payload', s.token);
+      final client = WplmClient(
+        baseUrl: 'https://example.test',
+        licenseKey: 'KEY',
+        productId: 42,
+        publicKeyBase64: s.publicKey,
+        transport: FakeTransport((m, u, b) {
+          throw const WplmNetworkError('offline');
+        }),
+        store: store,
+      );
+
+      expect(
+        client.validate(offlineOk: true),
+        throwsA(isA<WplmProductMismatch>()),
+      );
+    });
+
+    test('offline: pid enforced even when productId set but token has no pid',
+        () async {
+      final s = await signWithPid(null); // legacy token, no pid
+      final store = InMemoryTokenStore();
+      await store.write('wplm.signed_payload', s.token);
+      final client = WplmClient(
+        baseUrl: 'https://example.test',
+        licenseKey: 'KEY',
+        productId: 42,
+        publicKeyBase64: s.publicKey,
+        transport: FakeTransport((m, u, b) {
+          throw const WplmNetworkError('offline');
+        }),
+        store: store,
+      );
+
+      expect(
+        client.validate(offlineOk: true),
+        throwsA(isA<WplmProductMismatch>()),
+      );
+    });
+
+    test('backward compatible: no productId configured skips pid check',
+        () async {
+      final s = await signWithPid(null); // legacy token, no pid
+      final store = InMemoryTokenStore();
+      await store.write('wplm.signed_payload', s.token);
+      final client = WplmClient(
+        baseUrl: 'https://example.test',
+        licenseKey: 'KEY',
+        // productId intentionally null = opt out of product binding
+        publicKeyBase64: s.publicKey,
+        transport: FakeTransport((m, u, b) {
+          throw const WplmNetworkError('offline');
+        }),
+        store: store,
+      );
+
+      final result = await client.validate(offlineOk: true);
+      expect(result.valid, isTrue);
+    });
+
+    test('online recovers from a rotated signing key', () async {
+      // Token signed by the CURRENT key, but the store holds a STALE key.
+      final good = await signWithPid(42);
+      final stale = await TestSigner.create();
+      final store = InMemoryTokenStore();
+      await store.write('wplm.public_key', stale.publicKeyBase64);
+
+      final client = WplmClient(
+        baseUrl: 'https://example.test',
+        licenseKey: 'KEY',
+        productId: 42,
+        // publicKeyBase64 omitted so it reads the stale store key first.
+        transport: FakeTransport((m, u, b) {
+          if (u.path.endsWith('/validate')) {
+            return WplmResponse(
+              200,
+              successBody(<String, dynamic>{
+                'valid': true,
+                'license': <String, dynamic>{'id': 1, 'status': 1},
+                'signed_payload': good.token,
+                'needs_activation': false,
+              }),
+            );
+          }
+          if (u.path.endsWith('/public-key')) {
+            return WplmResponse(
+              200,
+              successBody(<String, dynamic>{'public_key': good.publicKey}),
+            );
+          }
+          return WplmResponse(200, successBody(<String, dynamic>{'crl': ''}));
+        }),
+        store: store,
+      );
+
+      final result = await client.validate();
+      expect(result.valid, isTrue);
+    });
+  });
 }

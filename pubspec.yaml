@@ -1,6 +1,6 @@
 name: wplm
 description: Official Dart/Flutter SDK for WP License Manager (WPLM) — validate, activate, and verify software licenses online and offline.
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/wplm/wplm-dart
 homepage: https://github.com/wplm/wplm-dart
 issue_tracker: https://github.com/wplm/wplm-dart/issues
