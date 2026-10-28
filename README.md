@@ -2,16 +2,15 @@
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=2,9,17&height=160&section=header&text=wplm-dart&fontSize=52&fontAlignY=42&animation=fadeIn&fontColor=ffffff" />
 
-### WP License Manager — Dart / Flutter SDK
+# WP License Manager — Dart / Flutter SDK
 
-[![pub.dev](https://img.shields.io/pub/v/wplm?style=for-the-badge&logo=dart&logoColor=white&color=0175C2)](https://pub.dev/packages/wplm)
-[![CI](https://img.shields.io/github/actions/workflow/status/wplm/wplm-dart/ci.yaml?style=for-the-badge&label=CI&logo=github-actions&logoColor=white)](https://github.com/thisisfaizi/wplm-dart/actions/workflows/ci.yaml)
-[![Coverage](https://img.shields.io/codecov/c/github/wplm/wplm-dart?style=for-the-badge&logo=codecov&logoColor=white)](https://codecov.io/gh/wplm/wplm-dart)
+[![CI](https://img.shields.io/github/actions/workflow/status/thisisfaizi/wplm-dart/ci.yaml?style=for-the-badge&label=CI&logo=github-actions&logoColor=white)](https://github.com/thisisfaizi/wplm-dart/actions/workflows/ci.yaml)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Dart](https://img.shields.io/badge/Dart-3.0%2B-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.4%2B-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
 
-<p>Offline-first Ed25519 license validation for Dart and Flutter apps,<br>
-backed by a self-hosted <a href="https://github.com/thisisfaizi/wp-license-manager">WP License Manager</a> server.</p>
+<p>Dart &amp; Flutter SDK for WP License Manager — activate, validate and verify Ed25519-signed software<br>
+license keys offline in Flutter and Dart apps. Backed by a self-hosted<br>
+<a href="https://github.com/thisisfaizi/wp-license-manager">WP License Manager</a> software licensing server for WordPress / WooCommerce.</p>
 
 </div>
 
@@ -32,10 +31,15 @@ on Android, iOS, Windows, macOS, Linux, web, and plain Dart.
 
 ## Install
 
+> Not yet published to pub.dev; install from GitHub for now.
+
 ```yaml
 # pubspec.yaml
 dependencies:
-  wplm: ^0.1.0
+  wplm:
+    git:
+      url: https://github.com/thisisfaizi/wplm-dart.git
+      ref: main
   flutter_secure_storage: ^9.0.0   # recommended for OS secure cache
   device_info_plus: ^10.0.0        # recommended for hardware fingerprint
 ```
@@ -186,7 +190,6 @@ dart format .
 - [Python SDK](https://github.com/thisisfaizi/wplm-python)
 - [PHP SDK](https://github.com/thisisfaizi/wplm-php)
 - [JavaScript / TypeScript SDK](https://github.com/thisisfaizi/wplm-js)
-- [OpenAPI 3.1 spec](https://github.com/thisisfaizi/wplm-openapi)
 
 ---
 
